@@ -329,13 +329,29 @@ class PushTEnv(gym.Env):
             marker_size = int(8 / 96 * render_size)
             thickness = int(1 / 96 * render_size)
             cv2.drawMarker(
-                img,
-                coord,
-                color=(255, 0, 0),
-                markerType=cv2.MARKER_CROSS,
-                markerSize=marker_size,
-                thickness=thickness,
+            img,
+            coord,
+            color=(255, 0, 0),
+            markerType=cv2.MARKER_CROSS,
+            markerSize=marker_size,
+            thickness=thickness,
             )
+        
+        # Add keypoints visualization
+        if render_action and self.obs_type == "keypoints":
+            # Draw block keypoints in red
+            keypoints = self.get_keypoints(self._block_shapes)
+            for point in keypoints:
+                point_coord = (point / 512 * [height, width]).astype(np.int32)
+                radius = int(1 / 96 * render_size)
+                cv2.circle(img, point_coord, radius, (0, 0, 255), -1)  # Red circles
+            
+            # Draw goal keypoints in green
+            keypoints_goal = self.get_keypoints(self._block_shapes_goal)
+            for point in keypoints_goal:
+                point_coord = (point / 512 * [height, width]).astype(np.int32)
+                radius = int(1 / 96 * render_size)
+                cv2.circle(img, point_coord, radius, (0, 255, 0), -1)  # Green circles
         return img
 
     def render(self):
