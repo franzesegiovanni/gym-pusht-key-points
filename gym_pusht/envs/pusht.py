@@ -520,19 +520,27 @@ class PushTEnv(gym.Env):
 
         if static:
             body = pymunk.Body(body_type=pymunk.Body.STATIC)
-
+            # For static bodies, set a filter that prevents collisions
+            ghost_category = 0x2  # A unique category for ghost objects
+            ghost_mask = 0x0      # Don't collide with anything
         else:
             mass = 1
             inertia1 = pymunk.moment_for_poly(mass, vertices=vertices1)
             inertia2 = pymunk.moment_for_poly(mass, vertices=vertices1)
             body = pymunk.Body(mass, inertia1 + inertia2)
             body.friction = 1
+            ghost_category = 0x1  # Regular category
+            ghost_mask = mask    # Regular mask
+
         shape1 = pymunk.Poly(body, vertices1)
         shape2 = pymunk.Poly(body, vertices2)
         shape1.color = pygame.Color(color) 
-        shape2.color = pygame.Color(color) 
-        shape1.filter = pymunk.ShapeFilter(mask=mask)
-        shape2.filter = pymunk.ShapeFilter(mask=mask)
+        shape2.color = pygame.Color(color)
+        
+        # Apply collision filters
+        shape1.filter = pymunk.ShapeFilter(categories=ghost_category, mask=ghost_mask)
+        shape2.filter = pymunk.ShapeFilter(categories=ghost_category, mask=ghost_mask)
+        
         body.center_of_gravity = (shape1.center_of_gravity + shape2.center_of_gravity) / 2
         body.angle = angle
         body.position = position
