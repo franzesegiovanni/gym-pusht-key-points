@@ -56,7 +56,7 @@ class PushTEnv(gym.Env):
     environment: [agent_x, agent_y, block_x, block_y, block_angle]. The values are in the range [0, 512] for the agent
     and block positions and [0, 2*pi] for the block angle.
 
-    If `obs_type` is set to `environment_state_agent_pos` the observation space is a dictionary with:
+    If `obs_type` is set to `keypoints` the observation space is a dictionary with:
     - `environment_state`: 16-dimensional vector representing the keypoint locations of the T (in [x0, y0, x1, y1, ...]
         format). The values are in the range [0, 512]. See `get_keypoints` for a diagram showing the location of the
         keypoint indices.
@@ -188,10 +188,15 @@ class PushTEnv(gym.Env):
                 high=np.array([512, 512, 512, 512, 2 * np.pi]),
                 dtype=np.float64,
             )
-        elif self.obs_type == "environment_state_agent_pos":
+        elif self.obs_type == "keypoints":
             self.observation_space = spaces.Dict(
                 {
                     "environment_state": spaces.Box(
+                        low=np.zeros(16),
+                        high=np.full((16,), 512),
+                        dtype=np.float64,
+                    ),
+                    "goal_state": spaces.Box(
                         low=np.zeros(16),
                         high=np.full((16,), 512),
                         dtype=np.float64,
@@ -225,13 +230,14 @@ class PushTEnv(gym.Env):
             )
         else:
             raise ValueError(
-                f"Unknown obs_type {self.obs_type}. Must be one of [pixels, state, environment_state_agent_pos, "
+                f"Unknown obs_type {self.obs_type}. Must be one of [pixels, state, keypoints, "
                 "pixels_agent_pos]"
             )
 
     def _get_coverage(self):
         goal_body = self.get_goal_pose_body(self.goal_pose)
         goal_geom = pymunk_to_shapely(goal_body, self.block.shapes)
+
         block_geom = pymunk_to_shapely(self.block, self.block.shapes)
         intersection_area = goal_geom.intersection(block_geom).area
         goal_area = goal_geom.area
@@ -356,9 +362,18 @@ class PushTEnv(gym.Env):
             self.window.blit(
                 screen, screen.get_rect()
             )  # copy our drawings from `screen` to the visible window
+            if self.obs_type == "keypoints":
+                # add the key points that are stored in the observation 
+                key_points = self.get_keypoints(self._block_shapes)
+                for point in key_points:
+                    pygame.draw.circle(self.window, pygame.Color("red"), point, 5)
+                key_points_goal = self.get_keypoints(self._block_shapes_goal)
+                for point in key_points_goal:
+                    pygame.draw.circle(self.window, pygame.Color("green"), point, 5)
             pygame.event.pump()
             self.clock.tick(self.metadata["render_fps"] * int(1 / (self.dt * self.control_hz)))
             pygame.display.update()
+
         else:
             raise ValueError(self.render_mode)
 
@@ -387,9 +402,10 @@ class PushTEnv(gym.Env):
             block_angle = self.block.angle % (2 * np.pi)
             return np.concatenate([agent_position, block_position, [block_angle]], dtype=np.float64)
 
-        if self.obs_type == "environment_state_agent_pos":
+        if self.obs_type == "keypoints":
             return {
                 "environment_state": self.get_keypoints(self._block_shapes).flatten(),
+                "goal_state": self.get_keypoints(self._block_shapes_goal).flatten(),
                 "agent_pos": np.array(self.agent.position),
             }
 
@@ -447,6 +463,7 @@ class PushTEnv(gym.Env):
         self.agent = self.add_circle(self.space, (256, 400), 15)
         self.block, self._block_shapes = self.add_tee(self.space, (256, 300), 0)
         self.goal_pose = np.array([256, 256, np.pi / 4])  # x, y, theta (in radians)
+        self.block_goal, self._block_shapes_goal = self.add_tee_static(self.space, (self.goal_pose[0], self.goal_pose[1]), self.goal_pose[2], color="LightGreen")
         if self.block_cog is not None:
             self.block.center_of_gravity = self.block_cog
 
@@ -514,6 +531,39 @@ class PushTEnv(gym.Env):
         body.angle = angle
         body.position = position
         body.friction = 1
+        space.add(body, shape1, shape2)
+        return body, [shape1, shape2]
+
+    @staticmethod
+    def add_tee_static(space, position, angle, scale=30, color="LightSlateGray", mask=None):
+        if mask is None:
+            mask = pymunk.ShapeFilter.ALL_MASKS()
+        # Use static body type that won't move or interact physically
+        body = pymunk.Body(body_type=pymunk.Body.STATIC)
+        length = 4
+        vertices1 = [
+            (-length * scale / 2, scale),
+            (length * scale / 2, scale),
+            (length * scale / 2, 0),
+            (-length * scale / 2, 0),
+        ]
+        vertices2 = [
+            (-scale / 2, scale),
+            (-scale / 2, length * scale),
+            (scale / 2, length * scale),
+            (scale / 2, scale),
+        ]
+        shape1 = pymunk.Poly(body, vertices1)
+        shape2 = pymunk.Poly(body, vertices2)
+        shape1.color = pygame.Color(color)
+        shape2.color = pygame.Color(color)
+        # Option to make it sensor to not affect collisions
+        shape1.sensor = True
+        shape2.sensor = True
+        shape1.filter = pymunk.ShapeFilter(mask=mask)
+        shape2.filter = pymunk.ShapeFilter(mask=mask)
+        body.angle = angle
+        body.position = position
         space.add(body, shape1, shape2)
         return body, [shape1, shape2]
 
