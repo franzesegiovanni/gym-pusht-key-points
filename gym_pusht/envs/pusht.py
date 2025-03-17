@@ -463,7 +463,7 @@ class PushTEnv(gym.Env):
         self.agent = self.add_circle(self.space, (256, 400), 15)
         self.block, self._block_shapes = self.add_tee(self.space, (256, 300), 0)
         self.goal_pose = np.array([256, 256, np.pi / 4])  # x, y, theta (in radians)
-        self.block_goal, self._block_shapes_goal = self.add_tee_static(self.space, (self.goal_pose[0], self.goal_pose[1]), self.goal_pose[2], color="LightGreen")
+        self.block_goal, self._block_shapes_goal = self.add_tee(self.space, (self.goal_pose[0], self.goal_pose[1]), self.goal_pose[2], color="LightGreen", static=True)
         if self.block_cog is not None:
             self.block.center_of_gravity = self.block_cog
 
@@ -501,10 +501,9 @@ class PushTEnv(gym.Env):
         return body
 
     @staticmethod
-    def add_tee(space, position, angle, scale=30, color="LightSlateGray", mask=None):
+    def add_tee(space, position, angle, scale=30, color="LightSlateGray", mask=None, static=False):
         if mask is None:
             mask = pymunk.ShapeFilter.ALL_MASKS()
-        mass = 1
         length = 4
         vertices1 = [
             (-length * scale / 2, scale),
@@ -512,61 +511,33 @@ class PushTEnv(gym.Env):
             (length * scale / 2, 0),
             (-length * scale / 2, 0),
         ]
-        inertia1 = pymunk.moment_for_poly(mass, vertices=vertices1)
         vertices2 = [
             (-scale / 2, scale),
             (-scale / 2, length * scale),
             (scale / 2, length * scale),
             (scale / 2, scale),
         ]
-        inertia2 = pymunk.moment_for_poly(mass, vertices=vertices1)
-        body = pymunk.Body(mass, inertia1 + inertia2)
+
+        if static:
+            body = pymunk.Body(body_type=pymunk.Body.STATIC)
+
+        else:
+            mass = 1
+            inertia1 = pymunk.moment_for_poly(mass, vertices=vertices1)
+            inertia2 = pymunk.moment_for_poly(mass, vertices=vertices1)
+            body = pymunk.Body(mass, inertia1 + inertia2)
+            body.friction = 1
         shape1 = pymunk.Poly(body, vertices1)
         shape2 = pymunk.Poly(body, vertices2)
-        shape1.color = pygame.Color(color)
-        shape2.color = pygame.Color(color)
+        shape1.color = pygame.Color(color) 
+        shape2.color = pygame.Color(color) 
         shape1.filter = pymunk.ShapeFilter(mask=mask)
         shape2.filter = pymunk.ShapeFilter(mask=mask)
         body.center_of_gravity = (shape1.center_of_gravity + shape2.center_of_gravity) / 2
         body.angle = angle
         body.position = position
-        body.friction = 1
         space.add(body, shape1, shape2)
         return body, [shape1, shape2]
-
-    @staticmethod
-    def add_tee_static(space, position, angle, scale=30, color="LightSlateGray", mask=None):
-        if mask is None:
-            mask = pymunk.ShapeFilter.ALL_MASKS()
-        # Use static body type that won't move or interact physically
-        body = pymunk.Body(body_type=pymunk.Body.STATIC)
-        length = 4
-        vertices1 = [
-            (-length * scale / 2, scale),
-            (length * scale / 2, scale),
-            (length * scale / 2, 0),
-            (-length * scale / 2, 0),
-        ]
-        vertices2 = [
-            (-scale / 2, scale),
-            (-scale / 2, length * scale),
-            (scale / 2, length * scale),
-            (scale / 2, scale),
-        ]
-        shape1 = pymunk.Poly(body, vertices1)
-        shape2 = pymunk.Poly(body, vertices2)
-        shape1.color = pygame.Color(color)
-        shape2.color = pygame.Color(color)
-        # Option to make it sensor to not affect collisions
-        shape1.sensor = True
-        shape2.sensor = True
-        shape1.filter = pymunk.ShapeFilter(mask=mask)
-        shape2.filter = pymunk.ShapeFilter(mask=mask)
-        body.angle = angle
-        body.position = position
-        space.add(body, shape1, shape2)
-        return body, [shape1, shape2]
-
     @staticmethod
     def get_keypoints(block_shapes):
         """Get a (8, 2) numpy array with the T keypoints.
