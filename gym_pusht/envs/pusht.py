@@ -287,6 +287,9 @@ class PushTEnv(gym.Env):
                     rs.randint(100, 400),
                     rs.randint(100, 400),
                     rs.randn() * 2 * np.pi - np.pi,
+                    rs.randint(100, 400),
+                    rs.randint(100, 400),
+                    rs.randn() * 2 * np.pi - np.pi,
                 ],
                 # dtype=np.float64
             )
@@ -307,13 +310,13 @@ class PushTEnv(gym.Env):
         screen.fill((255, 255, 255))
         draw_options = DrawOptions(screen)
 
-        # Draw goal pose
-        goal_body = self.get_goal_pose_body(self.goal_pose)
-        for shape in self.block.shapes:
-            goal_points = [goal_body.local_to_world(v) for v in shape.get_vertices()]
-            goal_points = [pymunk.pygame_util.to_pygame(point, draw_options.surface) for point in goal_points]
-            goal_points += [goal_points[0]]
-            pygame.draw.polygon(screen, pygame.Color("LightGreen"), goal_points)
+        # # Draw goal pose
+        # goal_body = self.get_goal_pose_body(self.goal_pose)
+        # for shape in self.block.shapes:
+        #     goal_points = [goal_body.local_to_world(v) for v in shape.get_vertices()]
+        #     goal_points = [pymunk.pygame_util.to_pygame(point, draw_options.surface) for point in goal_points]
+        #     goal_points += [goal_points[0]]
+        #     pygame.draw.polygon(screen, pygame.Color("LightGreen"), goal_points)
 
         # Draw agent and block
         self.space.debug_draw(draw_options)
@@ -498,7 +501,7 @@ class PushTEnv(gym.Env):
         self.agent = self.add_circle(self.space, (256, 400), 15)
         self.block, self._block_shapes = self.add_tee(self.space, (256, 300), 0)
         self.goal_pose = np.array([256, 256, np.pi / 4])  # x, y, theta (in radians)
-        self.block_goal, self._block_shapes_goal = self.add_tee(self.space, (self.goal_pose[0], self.goal_pose[1]), self.goal_pose[2], color="LightGreen", static=True)
+        self.block_goal, self._block_shapes_goal = self.add_tee(self.space, (self.goal_pose[0], self.goal_pose[1]), self.goal_pose[2], color="LightGreen", ghost=True)
         if self.block_cog is not None:
             self.block.center_of_gravity = self.block_cog
 
@@ -515,6 +518,10 @@ class PushTEnv(gym.Env):
         self.block.position = list(state[2:4])
         self.block.angle = state[4]
 
+        #set the goal pose
+        self.block_goal.position = list(state[5:7])
+        self.block_goal.angle = state[7]    
+        # self.goal_pose = np.array([state[5], state[6], state[7]])
         # Run physics to take effect
         self.space.step(self.dt)
 
@@ -536,7 +543,7 @@ class PushTEnv(gym.Env):
         return body
 
     @staticmethod
-    def add_tee(space, position, angle, scale=30, color="LightSlateGray", mask=None, static=False):
+    def add_tee(space, position, angle, scale=30, color="LightSlateGray", mask=None, ghost=False):
         if mask is None:
             mask = pymunk.ShapeFilter.ALL_MASKS()
         length = 4
@@ -552,18 +559,16 @@ class PushTEnv(gym.Env):
             (scale / 2, length * scale),
             (scale / 2, scale),
         ]
-
-        if static:
-            body = pymunk.Body(body_type=pymunk.Body.STATIC)
-            # For static bodies, set a filter that prevents collisions
+        mass = 1
+        inertia1 = pymunk.moment_for_poly(mass, vertices=vertices1)
+        inertia2 = pymunk.moment_for_poly(mass, vertices=vertices1)
+        body = pymunk.Body(mass, inertia1 + inertia2)
+        body.friction = 1
+        if ghost:
+            # Make it a ghost by setting special collision filters
             ghost_category = 0x2  # A unique category for ghost objects
             ghost_mask = 0x0      # Don't collide with anything
         else:
-            mass = 1
-            inertia1 = pymunk.moment_for_poly(mass, vertices=vertices1)
-            inertia2 = pymunk.moment_for_poly(mass, vertices=vertices1)
-            body = pymunk.Body(mass, inertia1 + inertia2)
-            body.friction = 1
             ghost_category = 0x1  # Regular category
             ghost_mask = mask    # Regular mask
 

@@ -52,7 +52,11 @@ class DemonstrationRecorder:
         if keys[pygame.K_DOWN]:
             action[1] = 1.0
         
-        return action
+        # Handle saving with S key
+        pressed_save = False
+        if keys[pygame.K_s]:
+            pressed_save = True
+        return action, pressed_save
     
     def get_joystick_action(self):
         """Convert joystick input to action"""
@@ -113,39 +117,48 @@ class DemonstrationRecorder:
         print("  R: Reset and start a new episode")
         print("  ESC: Stop recording")
         print("================================\n")
-        
+        terminated = False
+        truncated = False
         while self.running and step < max_steps:
+    
             self.env.render()  # Just render without assigning unused variable
             self.process_events()
             
             # Get action based on input device
             if self.input_device == "keyboard":
-                delta_x = self.get_keyboard_action()
-                print("delta_x",delta_x)
+                delta_x, pressed_save = self.get_keyboard_action()
+                # print("delta_x",delta_x)
                 state= self.env.get_obs()["agent_pos"]
-                print("state",state)    
+                # print("state",state)    
                 action = self.env.get_obs()["agent_pos"] + delta_x*10
             else:
                 action = self.get_joystick_action()
             
-            # Take a step in the environment
-            next_obs, reward, terminated, truncated, _ = self.env.step(action)  # Ignore info
+            if delta_x[0] != 0 or delta_x[1] != 0:
+
+                # Take a step in the environment
+                next_obs, reward, terminated, truncated, info = self.env.step(action)
+                # what is the state of the environment?
+                state=self.env.get_obs()
+                print("state",state)
+                print(f"Episode terminated: {info}")  # info might contain reason for termination
             
-            # Record step data
-            step_data = {
-                "observation": obs.tolist() if hasattr(obs, 'tolist') else obs,
-                "action": action.tolist(),
-                "reward": float(reward),
-                "next_observation": next_obs.tolist() if hasattr(next_obs, 'tolist') else next_obs
-            }
-            self.current_episode.append(step_data)
-            
-            obs = next_obs
-            step += 1
-            
-            if terminated or truncated:
+                # Record step data
+                step_data = {
+                    "observation": obs.tolist() if hasattr(obs, 'tolist') else obs,
+                    "action": action.tolist(),
+                    "reward": float(reward),
+                    "next_observation": next_obs.tolist() if hasattr(next_obs, 'tolist') else next_obs
+                }
+                self.current_episode.append(step_data)
+
+                obs = next_obs
+                step += 1
+                print("step",step, "out of",max_steps)  
+            if terminated or pressed_save:
                 self.save_episode()
-                obs, _ = self.env.reset()  # Ignore info using underscore
+                # obs, _ = self.env.reset()  # Ignore info using underscore
+                obs, info = self.env.reset(options={"reset_to_state": [100.0, 250.0, 250.0, 260.0, 3.14/4, 250.0, 260.0, 3.14/2]})
                         
             # Use a consistent frame rate to prevent flickering
             pygame.time.Clock().tick(60)  # Limit to 60 FPS
