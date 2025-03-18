@@ -103,7 +103,7 @@ class DemonstrationRecorder:
         """Main recording loop"""
         self.setup_input()
         
-        obs, info = self.env.reset()
+        obs, _ = self.env.reset()  # Ignore info
         self.running = True
         step = 0
         
@@ -115,16 +115,21 @@ class DemonstrationRecorder:
         print("================================\n")
         
         while self.running and step < max_steps:
+            self.env.render()  # Just render without assigning unused variable
             self.process_events()
             
             # Get action based on input device
             if self.input_device == "keyboard":
-                action = self.get_keyboard_action()
+                delta_x = self.get_keyboard_action()
+                print("delta_x",delta_x)
+                state= self.env.get_obs()["agent_pos"]
+                print("state",state)    
+                action = self.env.get_obs()["agent_pos"] + delta_x*10
             else:
                 action = self.get_joystick_action()
             
             # Take a step in the environment
-            next_obs, reward, terminated, truncated, info = self.env.step(action)
+            next_obs, reward, terminated, truncated, _ = self.env.step(action)  # Ignore info
             
             # Record step data
             step_data = {
@@ -140,18 +145,10 @@ class DemonstrationRecorder:
             
             if terminated or truncated:
                 self.save_episode()
-                obs, info = self.env.reset()
-            
-            # Update pygame display with some info
-            self.screen.fill((0, 0, 0))
-            font = pygame.font.SysFont(None, 24)
-            text = font.render(f"Episode: {len(self.demonstration)+1}, Steps: {len(self.current_episode)}", 
-                              True, (255, 255, 255))
-            self.screen.blit(text, (10, 10))
-            pygame.display.flip()
-            
-            # Add small delay to control input rate
-            pygame.time.wait(10)
+                obs, _ = self.env.reset()  # Ignore info using underscore
+                        
+            # Use a consistent frame rate to prevent flickering
+            pygame.time.Clock().tick(60)  # Limit to 60 FPS
         
         # Clean up
         self.env.close()
@@ -166,6 +163,8 @@ def main():
     args = parser.parse_args()
     
     recorder = DemonstrationRecorder(
+        env_name="gym_pusht/PushT-v0",  # Make sure this environment ID is correct
+        render_mode="human",
         input_device=args.device,
         obs_type=args.obs_type
     )

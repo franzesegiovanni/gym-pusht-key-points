@@ -329,12 +329,12 @@ class PushTEnv(gym.Env):
             marker_size = int(8 / 96 * render_size)
             thickness = int(1 / 96 * render_size)
             cv2.drawMarker(
-            img,
-            coord,
-            color=(255, 0, 0),
-            markerType=cv2.MARKER_CROSS,
-            markerSize=marker_size,
-            thickness=thickness,
+                img,
+                coord,
+                color=(255, 0, 0),
+                markerType=cv2.MARKER_CROSS,
+                markerSize=marker_size,
+                thickness=thickness,
             )
         
         # Add keypoints visualization
@@ -386,6 +386,25 @@ class PushTEnv(gym.Env):
                 key_points_goal = self.get_keypoints(self._block_shapes_goal)
                 for point in key_points_goal:
                     pygame.draw.circle(self.window, pygame.Color("green"), point, 5)
+                if self._last_action is not None:
+                    # Draw an X at the last action position
+                    action_pos = self._last_action
+                    # Create cross lines for X
+                    line_length = 10
+                    pygame.draw.line(
+                        self.window, 
+                        pygame.Color("red"),
+                        (action_pos[0] - line_length, action_pos[1] - line_length),
+                        (action_pos[0] + line_length, action_pos[1] + line_length),
+                        5  # Increased line width from 3 to 5
+                    )
+                    pygame.draw.line(
+                        self.window,
+                        pygame.Color("red"),
+                        (action_pos[0] - line_length, action_pos[1] + line_length),
+                        (action_pos[0] + line_length, action_pos[1] - line_length),
+                        5  # Increased line width from 3 to 5
+                    )
             pygame.event.pump()
             self.clock.tick(self.metadata["render_fps"] * int(1 / (self.dt * self.control_hz)))
             pygame.display.update()
