@@ -5,7 +5,8 @@ import numpy as np
 import time
 import json
 import argparse
-
+import pickle
+import os
 class DemonstrationRecorder:
     def __init__(self, env_name="gym_pusht/PushT-v0", obs_type="keypoints", 
                  render_mode="human", input_device="keyboard"):
@@ -96,21 +97,29 @@ class DemonstrationRecorder:
         
         if not filepath:
             timestamp = time.strftime("%Y%m%d-%H%M%S")
-            filepath = f"demonstration_{timestamp}.json"
+            #read scipt directory 
+            filepath = os.path.join(os.path.dirname(__file__), f"demonstration/demonstration_{timestamp}.pkl")
+            # filepath = f"demonstration/demonstration_{timestamp}.pkl"
         
-        with open(filepath, 'w') as f:
-            json.dump(self.demonstration, f)
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        # Use 'wb' mode for binary pickle files
+        with open(filepath, 'wb') as f:
+            pickle.dump(self.demonstration, f)
         
         print(f"Demonstration with {len(self.demonstration)} episodes saved to {filepath}")
     
-    def record(self, max_steps=10000):
+    def record(self, max_steps=1000):
         """Main recording loop"""
         self.setup_input()
         
-        obs, _ = self.env.reset()  # Ignore info
+        obs, _ = self.env.reset()
+        # obs, info = self.env.reset(options={"reset_to_state": np.array([1.0, 1.0, 230.0, 200.0, 3.0, 230.0, 200.0, 3.0])})
+        print( "first observation",obs)
         self.running = True
         step = 0
-        
+        # breakpoint()
         print("\n===== Demonstration Recorder =====")
         print("Controls:")
         print("  Arrow keys: Move the pusher (keyboard mode)")
@@ -118,7 +127,7 @@ class DemonstrationRecorder:
         print("  ESC: Stop recording")
         print("================================\n")
         terminated = False
-        truncated = False
+        # truncated = False
         while self.running and step < max_steps:
     
             self.env.render()  # Just render without assigning unused variable
@@ -134,15 +143,15 @@ class DemonstrationRecorder:
             else:
                 action = self.get_joystick_action()
             
-            if delta_x[0] != 0 or delta_x[1] != 0:
+            if True:
 
                 # Take a step in the environment
                 next_obs, reward, terminated, truncated, info = self.env.step(action)
                 # what is the state of the environment?
                 state=self.env.get_obs()
                 print("state",state)
-                print(f"Episode terminated: {info}")  # info might contain reason for termination
-            
+                # print(f"Episode terminated: {info}")  # info might contain reason for termination
+                print("Next observation:", next_obs)
                 # Record step data
                 step_data = {
                     "observation": obs.tolist() if hasattr(obs, 'tolist') else obs,
@@ -155,12 +164,12 @@ class DemonstrationRecorder:
                 obs = next_obs
                 step += 1
                 print("step",step, "out of",max_steps)  
-            if terminated or pressed_save:
+            # if terminated or pressed_save:
+            #     self.save_episode()
+            #     obs, _ = self.env.reset() 
+            if pressed_save:
                 self.save_episode()
-                # obs, _ = self.env.reset()  # Ignore info using underscore
-                obs, info = self.env.reset(options={"reset_to_state": [100.0, 250.0, 250.0, 260.0, 3.14/4, 250.0, 260.0, 3.14/2]})
-                        
-            # Use a consistent frame rate to prevent flickering
+                obs, _ = self.env.reset()                         
             pygame.time.Clock().tick(60)  # Limit to 60 FPS
         
         # Clean up

@@ -178,7 +178,7 @@ class PushTEnv(gym.Env):
         self.teleop = None
         self._last_action = None
 
-        self.success_threshold = 0.95  # 95% coverage
+        self.success_threshold = 0.90  # 95% coverage
 
     def _initialize_observation_space(self):
         if self.obs_type == "state":
@@ -190,15 +190,25 @@ class PushTEnv(gym.Env):
             )
         elif self.obs_type == "keypoints":
             self.observation_space = spaces.Dict(
-                {
-                    "environment_state": spaces.Box(
+                {   
+                    "object_state": spaces.Box(
+                        low=np.array([0, 0, 0]),
+                        high=np.array([512, 512, 2 * np.pi]),
+                        dtype=np.float64,
+                    ),
+                    "goal_state": spaces.Box(
+                        low=np.array([0, 0, 0]),
+                        high=np.array([512, 512, 2 * np.pi]),
+                        dtype=np.float64,
+                    ),
+                    "object_keypoints": spaces.Box(
                         low=np.zeros(16),
                         high=np.full((16,), 512),
                         dtype=np.float64,
                     ),
-                    "goal_state": spaces.Box(
-                        low=np.zeros(16),
-                        high=np.full((16,), 512),
+                    "goal_keypoints": spaces.Box(
+                        low=np.array([0, 0]),
+                        high=np.array([512, 512]),
                         dtype=np.float64,
                     ),
                     "agent_pos": spaces.Box(
@@ -291,7 +301,7 @@ class PushTEnv(gym.Env):
                     rs.randint(100, 400),
                     rs.randn() * 2 * np.pi - np.pi,
                 ],
-                # dtype=np.float64
+                dtype=np.float64
             )
         self._set_state(state)
 
@@ -442,8 +452,10 @@ class PushTEnv(gym.Env):
 
         if self.obs_type == "keypoints":
             return {
-                "environment_state": self.get_keypoints(self._block_shapes).flatten(),
-                "goal_state": self.get_keypoints(self._block_shapes_goal).flatten(),
+                "object_state" :np.array([self.block.position.x, self.block.position.y, self.block.angle]), #this angle is not blounded to 2*pi
+                "goal_state": np.array([self.block_goal.position.x, self.block_goal.position.y, self.block_goal.angle]),
+                "object_keypoints": self.get_keypoints(self._block_shapes).flatten(),
+                "goal_keypoints": self.get_keypoints(self._block_shapes_goal).flatten(),
                 "agent_pos": np.array(self.agent.position),
             }
 
@@ -474,7 +486,7 @@ class PushTEnv(gym.Env):
             "pos_agent": np.array(self.agent.position),
             "vel_agent": np.array(self.agent.velocity),
             "block_pose": np.array(list(self.block.position) + [self.block.angle]),
-            "goal_pose": self.goal_pose,
+            "goal_pose": np.array(list(self.block_goal.position) + [self.block_goal.angle]),
             "n_contacts": n_contact_points_per_step,
         }
         return info
@@ -500,8 +512,8 @@ class PushTEnv(gym.Env):
         # Add agent, block, and goal zone
         self.agent = self.add_circle(self.space, (256, 400), 15)
         self.block, self._block_shapes = self.add_tee(self.space, (256, 300), 0)
-        self.goal_pose = np.array([256, 256, np.pi / 4])  # x, y, theta (in radians)
-        self.block_goal, self._block_shapes_goal = self.add_tee(self.space, (self.goal_pose[0], self.goal_pose[1]), self.goal_pose[2], color="LightGreen", ghost=True)
+        # self.goal_pose = np.array([256, 256, np.pi / 4])  # x, y, theta (in radians)
+        self.block_goal, self._block_shapes_goal = self.add_tee(self.space, (256, 300), 0, color="LightGreen", ghost=True)
         if self.block_cog is not None:
             self.block.center_of_gravity = self.block_cog
 
@@ -515,12 +527,16 @@ class PushTEnv(gym.Env):
         # Setting angle rotates with respect to center of mass, therefore will modify the geometric position if not
         # the same as CoM. Therefore should theoretically set the angle first. But for compatibility with legacy data,
         # we do the opposite.
-        self.block.position = list(state[2:4])
         self.block.angle = state[4]
+        self.block.position = list(state[2:4])
+        
 
         #set the goal pose
+        self.block_goal.angle = state[7] 
         self.block_goal.position = list(state[5:7])
-        self.block_goal.angle = state[7]    
+   
+        self.goal_pose = np.array([state[5], state[6], state[7]])
+        # print("State", state)
         # self.goal_pose = np.array([state[5], state[6], state[7]])
         # Run physics to take effect
         self.space.step(self.dt)
