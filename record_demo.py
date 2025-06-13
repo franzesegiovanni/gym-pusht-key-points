@@ -7,6 +7,7 @@ import json
 import argparse
 import pickle
 import os
+from tqdm import tqdm
 class DemonstrationRecorder:
     def __init__(self, env_name="gym_pusht/PushT-v0", obs_type="keypoints", 
                  render_mode="human", input_device="keyboard"):
@@ -18,6 +19,7 @@ class DemonstrationRecorder:
         self.demonstration = []
         self.action_dim = self.env.action_space.shape[0]
         self.running = False
+        self.resetting = False
         self.current_episode = []
         
     def setup_input(self):
@@ -78,22 +80,20 @@ class DemonstrationRecorder:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
-                elif event.key == pygame.K_r:
-                    print("Resetting environment")
-                    self.save_episode()
-                    self.env.reset()
                     
     def save_episode(self):
         """Save the current episode if it has steps"""
         if len(self.current_episode) > 0:
             self.demonstration.append(self.current_episode)
+            print(f"Saved episode with {len(self.current_episode)} steps")
+            print("Total number of demonstration:", len(self.demonstration))
             print(f"Episode {len(self.demonstration)} saved with {len(self.current_episode)} steps")
             self.current_episode = []
     
     def save_demonstration(self, filepath=None):
         """Save the recorded demonstration to a file"""
         # Make sure any active episode is saved
-        self.save_episode()
+        # self.save_episode()
         
         if not filepath:
             timestamp = time.strftime("%Y%m%d-%H%M%S")
@@ -106,19 +106,33 @@ class DemonstrationRecorder:
         
         # Use 'wb' mode for binary pickle files
         with open(filepath, 'wb') as f:
-            pickle.dump(self.demonstration, f)
+            pickle.dump(self.current_episode, f)
         
-        print(f"Demonstration with {len(self.demonstration)} episodes saved to {filepath}")
+        # print(f"Demonstration with {len(self.demonstration)} episodes saved to {filepath}")
     
     def record(self, max_steps=1000):
         """Main recording loop"""
         self.setup_input()
-        
-        obs, _ = self.env.reset()
-        # obs, info = self.env.reset(options={"reset_to_state": np.array([1.0, 1.0, 230.0, 200.0, 3.0, 230.0, 200.0, 3.0])})
+        rs = np.random.RandomState()
+        state = np.array(
+            [
+                rs.randint(50, 450),
+                rs.randint(50, 450),
+                rs.randint(100, 400),
+                rs.randint(100, 400),
+                rs.randn() * 2 * np.pi - np.pi,
+                300, 
+                300,
+                np.pi/4
+            ],
+            dtype=np.float64
+        )
+        obs, info = self.env.reset(options={"reset_to_state": state})
+
+        # obs, _ = self.env.reset()
         print( "first observation",obs)
         self.running = True
-        step = 0
+        self.step = 0
         # breakpoint()
         print("\n===== Demonstration Recorder =====")
         print("Controls:")
@@ -128,49 +142,44 @@ class DemonstrationRecorder:
         print("================================\n")
         terminated = False
         # truncated = False
-        while self.running and step < max_steps:
+        while self.running and self.step < max_steps:
     
             self.env.render()  # Just render without assigning unused variable
             self.process_events()
             
             # Get action based on input device
             if self.input_device == "keyboard":
-                delta_x, pressed_save = self.get_keyboard_action()
-                # print("delta_x",delta_x)
-                state= self.env.get_obs()["agent_pos"]
-                # print("state",state)    
+                delta_x, pressed_save = self.get_keyboard_action()  
                 action = self.env.get_obs()["agent_pos"] + delta_x*10
             else:
                 action = self.get_joystick_action()
             
-            if True:
 
-                # Take a step in the environment
-                next_obs, reward, terminated, truncated, info = self.env.step(action)
-                # what is the state of the environment?
-                state=self.env.get_obs()
-                print("state",state)
-                # print(f"Episode terminated: {info}")  # info might contain reason for termination
-                print("Next observation:", next_obs)
-                # Record step data
-                step_data = {
-                    "observation": obs.tolist() if hasattr(obs, 'tolist') else obs,
-                    "action": action.tolist(),
-                    "reward": float(reward),
-                    "next_observation": next_obs.tolist() if hasattr(next_obs, 'tolist') else next_obs
-                }
-                self.current_episode.append(step_data)
-
-                obs = next_obs
-                step += 1
-                print("step",step, "out of",max_steps)  
-            # if terminated or pressed_save:
-            #     self.save_episode()
-            #     obs, _ = self.env.reset() 
-            if pressed_save:
-                self.save_episode()
-                obs, _ = self.env.reset()                         
-            pygame.time.Clock().tick(60)  # Limit to 60 FPS
+            # Take a step in the environment
+            next_obs, reward, terminated, truncated, info = self.env.step(action)
+            # what is the state of the environment?
+            # state=self.env.get_obs()
+            # Record step data
+            step_data = {
+                "observation": obs.tolist() if hasattr(obs, 'tolist') else obs,
+                "action": action.tolist(),
+                "reward": float(reward),
+                "next_observation": next_obs.tolist() if hasattr(next_obs, 'tolist') else next_obs
+            }
+            self.current_episode.append(step_data)
+            obs = next_obs
+            # Show progress with tqdm (updating in-place)
+            if self.step == 0:
+                self.pbar = tqdm(total=max_steps, desc="Recording")
+            self.pbar.update(1)
+            self.pbar.set_postfix({"episode": len(self.demonstration) + 1})
+            self.step += 1
+            
+            # Close the progress bar when done or reset
+            if terminated or truncated:
+                self.pbar.close()
+                                         
+            pygame.time.Clock().tick(20)  # Limit to 60 FPS
         
         # Clean up
         self.env.close()

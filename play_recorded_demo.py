@@ -5,47 +5,39 @@ import os
 import argparse
 import gym_pusht
 import pygame
+from utils import read_point_distribution
 #!/usr/bin/env python3
 
 def play_demonstration(demo_path, env_name="gym_pusht/PushT-v0", obs_type="keypoints", render_mode="human"):
     # Load the demonstration file
     with open(demo_path, 'rb') as f:
         demo_data = pickle.load(f)
-    demo_data= demo_data[0]
-    # Extract observations, actions, etc. from the demonstration
-    # The exact structure depends on how your demonstrations are saved
-    # breakpoint()
-    # Create the environment - adjust env_name to match your actual environment
-    # env = gym.make('PushT-v0')
-
 
     env = gym.make(env_name, obs_type=obs_type, render_mode=render_mode)
     
-    # Reset the environment
-    obs = env.reset()
     # reset to a specific state
-    # breakpoint()
     object_state=demo_data[0]['observation']['object_state']
     agent_state=demo_data[0]['observation']['agent_pos']
     goal_state=demo_data[0]['observation']['goal_state']
+    keypoint_object=demo_data[0]['observation']['object_keypoints']
+    keypoint_goal = demo_data[0]['observation']['goal_keypoints']
+    keypoint_object = np.array(keypoint_object).reshape(-1, 2)
+    keypoint_goal = np.array(keypoint_goal).reshape(-1, 2)
+    distribution = np.vstack((keypoint_object, keypoint_goal,agent_state))
+    print("Distribution shape:", distribution.shape)
     obs, info = env.reset(options={"reset_to_state": [agent_state[0], agent_state[1], object_state[0], object_state[1], object_state[2], goal_state[0], goal_state[1], goal_state[2]]})
     #choose an arbitrary starting state
     print("reset to state", [agent_state[0], agent_state[1], object_state[0], object_state[1], object_state[2], goal_state[0], goal_state[1], goal_state[2]])
-    # Set the initial state to match the first state in the demonstrationa    
-    # Play through the demonstration
     total_reward = 0
+    
     for i in range(1,len(demo_data)):
         action = demo_data[i]['action']
         next_obs, reward, terminated, truncated, info = env.step(action)
         total_reward += reward
-        #print the goal state of the environment
-        state=env.get_obs()
+        distribution=read_point_distribution(next_obs) 
+        # print(distribution.shape)
         env.render()  # Visualize each step
-
-        if terminated:
-            print("Environment signaled done")
-            break
-        pygame.time.Clock().tick(60)  # Limit to 60 FPS
+        pygame.time.Clock().tick(20)  # Limit to 60 FPS
     
     print(f"Demonstration playback complete. Total reward: {total_reward}")
     env.close()
