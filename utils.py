@@ -1,4 +1,5 @@
 import numpy as np
+import pickle
 def read_point_distribution(observation):
     """
     Extracts the point distribution from the observation.
@@ -21,3 +22,7 @@ def read_point_distribution(observation):
 
     
     return distribution
+
+def save_dataset(dataset, name='dataset.pkl'):
+    with open(name, 'wb') as f:
+        pickle.dump(dataset, f)

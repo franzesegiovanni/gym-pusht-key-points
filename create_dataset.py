@@ -3,7 +3,7 @@ import glob
 import gym
 import pickle
 import numpy as np
-
+from utils import save_dataset
 # Directory containing demonstration pickle files
 demo_dir = "demonstration"
 
@@ -11,14 +11,14 @@ demo_dir = "demonstration"
 demo_files = glob.glob(os.path.join(demo_dir, "*.pkl"))
 distribution_dim = 25
 distribution_tensor=np.empty((0, distribution_dim, 2))  # Initialize an empty tensor for distributions
-action_chunch_leght=60  # Length of action chunks
+action_chunch_leght=20  # Length of action chunks
 action_tensor = np.empty((0, action_chunch_leght, 2))
 for demo_path in demo_files:
 
     with open(demo_path, 'rb') as f:
         demo_data = pickle.load(f)
 
-    for i in range(0,len(demo_data)-action_chunch_leght, 2):
+    for i in range(0,len(demo_data)-action_chunch_leght):
     # reset to a specific state
         agent_state=demo_data[i]['observation']['agent_pos']
         keypoint_object=demo_data[i]['observation']['object_keypoints']
@@ -41,5 +41,5 @@ print(f"Distribution tensor shape: {dataset['distribution'].shape}")
 print(f"Action tensor shape: {dataset['action'].shape}")
 #save the object dataset as pickle
 
-with open('dataset.pkl', 'wb') as f:
-    pickle.dump(dataset, f)
+
+save_dataset(dataset, name='dataset.pkl')
