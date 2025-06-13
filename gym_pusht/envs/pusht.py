@@ -623,4 +623,7 @@ class PushTEnv(gym.Env):
                 v = v.rotated(shape.body.angle)
                 v = v + shape.body.position
                 keypoints.append(np.array(v))
+            keypoints.append(keypoints[-4]*0.5 + keypoints[-3]*0.5)
+            keypoints.append(keypoints[-3]*0.5 + keypoints[-2]*0.5)
+
         return np.row_stack(keypoints)
