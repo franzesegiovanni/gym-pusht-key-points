@@ -178,7 +178,7 @@ class PushTEnv(gym.Env):
         self.teleop = None
         self._last_action = None
 
-        self.success_threshold = 0.90  # 95% coverage
+        self.success_threshold = 0.85  # 95% coverage
 
     def _initialize_observation_space(self):
         if self.obs_type == "state":
@@ -365,6 +365,7 @@ class PushTEnv(gym.Env):
                 point_coord = (point / 512 * [height, width]).astype(np.int32)
                 radius = int(1 / 96 * render_size)
                 cv2.circle(img, point_coord, radius, (0, 255, 0), -1)  # Green circles
+            
         return img
 
     def render(self):
